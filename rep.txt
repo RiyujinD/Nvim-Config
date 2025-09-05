@@ -1,0 +1,20 @@
+# Lazy.nvim plugin cache
+.local/share/nvim/lazy/*
+
+# Undo, swap, backup files 
+*.swp
+*.swo
+*.swn
+*.un~ 
+*.bak
+
+# Session files
+Session.vim
+
+# Compiled Lua files
+*.luac
+
+.local/state/nvim
+lazy-lock.json
+.gitignore
+
