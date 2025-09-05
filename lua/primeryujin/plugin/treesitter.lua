@@ -54,7 +54,6 @@ return {
       highlight = { enable = true },
       indent = { enable = true },
       ensure_installed = {
-        "bash",
         "c",
         "diff",
         "html",
@@ -69,15 +68,8 @@ return {
         "markdown_inline",
         "printf",
         "python",
-        "query",
-        "regex",
-        "toml",
         "tsx",
         "typescript",
-        "vim",
-        "vimdoc",
-        "xml",
-        "yaml",
       },
       incremental_selection = {
         enable = true,
@@ -142,4 +134,20 @@ return {
     event = { "BufReadPost", "BufNewFile" },
     opts = {},
   },
+
+
+
+  {
+      "nvim-treesitter/playground",
+      dependencies = { "nvim-treesitter/nvim-treesitter" },
+      config = function()
+          require("nvim-treesitter.configs").setup {
+              playground = {
+                  enable = true,
+                  updatetime = 25,       -- Debounced time for highlighting nodes in ms
+                  persist_queries = false -- Save queries across sessions
+              }
+          }
+      end
+  }
 }
