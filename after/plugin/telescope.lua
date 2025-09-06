@@ -7,6 +7,6 @@ vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Telescope: Help T
 vim.keymap.set("n", "<C-p>", builtin.git_files, {})
 
 -- Prompted grep
-vim.keymap.set("n", "<leader>ps", function()
+vim.keymap.set("n", "<leader>gi", function()
     builtin.grep_string({ search = vim.fn.input("Grep > ") })
 end, {})
