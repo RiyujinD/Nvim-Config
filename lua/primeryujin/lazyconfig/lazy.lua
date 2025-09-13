@@ -61,3 +61,6 @@ require("lazy").setup({
   change_detection = { notify = true }, -- Notify if plugin is outdated
 
 })
+
+
+

@@ -1,3 +1,8 @@
 return {
-	{ "vuciv/golf" },
+    {
+        "vuciv/golf",
+        lazy = false,
+        priority = 800,
+    },
 }
+
