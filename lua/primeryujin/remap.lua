@@ -28,9 +28,12 @@ vim.keymap.set("n", "<leader>Y", [["+Y]])
 vim.keymap.set("i", "<C-c>", "<Esc>")
 
 
-vim.keymap.set("n", "<leader>tm", "<cmd>silent !tmux neww tmux-sessionizer<CR>")
-vim.keymap.set("n", "<leader>tms", "<cmd>silent !tmux-sessionizer -s 0 --vsplit<CR>")
-vim.keymap.set("n", "<leader>tmg", "<cmd>silent !tmux neww tmux-sessionizer -s 0<CR>")
+-- Open tmux-sessionizer in a vertical split terminal
+vim.keymap.set("n", "<leader>tm", ":vsplit | terminal tmux-sessionizer<CR>")
+-- Open in horizontal split
+vim.keymap.set("n", "<leader>th", ":split | terminal tmux-sessionizer<CR>")
+-- Open in a vertical split and send a session argument
+vim.keymap.set("n", "<leader>ts", ":vsplit | terminal tmux-sessionizer -s 0 --vsplit<CR>")
 
 
 

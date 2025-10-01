@@ -1,138 +1,65 @@
--- plugins/lsp.lua
--- LSP + Mason + Fidget + LazyDev (keeps your original deps and behavior)
-local root_files = {
-	".luarc.json",
-	".luarc.jsonc",
-	".luacheckrc",
-	".stylua.toml",
-	"stylua.toml",
-	"selene.toml",
-	"selene.yml",
-	".git",
-	"requirements.txt",
-	"manage.py",
-	"app.py",
+-- LSP Servers and opts
+local SERVERS = {
+	pyright = { filetypes = { "python" } },
+	clangd = { filetypes = { "c", "cpp", "objc", "objcpp" } },
+	sqls = { filetypes = { "sql" } },
+	html = { filetypes = { "html", "htmldjango" } },
+	cssls = { filetypes = { "css", "scss" } },
+	jsonls = { filetypes = { "json", "jsonc" } },
+	yamlls = { filetypes = { "yaml" } },
+	marksman = { filetypes = { "markdown" } },
+	rust_analyzer = { filetypes = { "rust" } },
+	tailwindcss = { filetypes = { "html", "css", "javascript", "typescript", "svelte" } },
+	emmet_ls = { filetypes = { "html", "css", "javascript", "typescript", "svelte" } },
+	lua_ls = {
+		filetypes = { "lua", "luau", "rockspec", "xmake" },
+		settings = {
+			Lua = {
+				runtime = {
+					-- Tell the language server which Lua version (LuaJIT for Neovim)
+					version = "LuaJIT",
+					-- Use package.path so require() resolution works
+					path = vim.split(package.path, ";"),
+				},
+				diagnostics = {
+					-- Recognize the `vim` global
+					globals = { "vim" },
+				},
+				workspace = {
+					-- Add common runtime folders to the workspace library so the LS knows about builtin types
+					library = {
+						[vim.fn.expand("$VIMRUNTIME/lua")] = true,
+						[vim.fn.expand("$HOME/.config/nvim/lua")] = true,
+						[vim.fn.stdpath("config") .. "/lua"] = true,
+					},
+					checkThirdParty = false, -- avoid prompts
+				},
+				telemetry = { enable = false }, -- opt out
+			},
+		},
+	},
 }
-
-local function make_root_dir(fname)
-	-- Trying project root files first
-	local root_files_found = vim.fs.find(root_files, { path = fname, upward = true })
-	if #root_files_found > 0 then
-		return vim.fs.dirname(root_files_found[1])
-	end
-
-	-- Fallback to git root
-	local git_root = vim.fs.find(".git", { path = fname, upward = true })[1]
-	if git_root then
-		return vim.fs.dirname(git_root)
-	end
-
-	-- Fallback to file's directory
-	return vim.fs.dirname(fname)
-end
 
 return {
 	"neovim/nvim-lspconfig",
 	event = { "BufReadPre", "BufNewFile" },
 	dependencies = {
-		"stevearc/conform.nvim",
-		"williamboman/mason.nvim",
-		"williamboman/mason-lspconfig.nvim",
-		"hrsh7th/cmp-nvim-lsp",
-		"hrsh7th/cmp-buffer",
-		"hrsh7th/cmp-path",
-		"hrsh7th/cmp-cmdline",
 		"hrsh7th/nvim-cmp",
+		"hrsh7th/cmp-nvim-lsp",
 		"L3MON4D3/LuaSnip",
 		"saadparwaiz1/cmp_luasnip",
+		"williamboman/mason.nvim",
+		"williamboman/mason-lspconfig.nvim",
 		"j-hui/fidget.nvim",
-		{
-			"folke/lazydev.nvim",
-			ft = "lua",
-			opts = {
-				library = {
-					{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
-				},
-			},
-		},
+		"stevearc/conform.nvim",
+		"folke/lazydev.nvim",
 	},
-	opts = {
-		root_files = root_files,
-		servers = {
-			-- LSP servers
-			clangd = {},
-			pyright = {},
-			sqls = {},
-			sqlls = {},
-			ts_ls = {},
-			html = {},
-			emmet_ls = {},
-			cssls = {},
-			jsonls = {},
-			yamlls = {},
-			marksman = {},
-			rust_analyzer = {},
-			tailwindcss = {},
-			lua_ls = {
-				settings = {
-					Lua = {
-						runtime = {
-							version = "LuaJIT",
-							path = vim.split(package.path, ";"),
-						},
-						diagnostics = {
-							globals = { "vim" },
-						},
-						workspace = {
-							library = {
-								[vim.fn.expand("$HOME/.config/nvim")] = true,
-								[vim.fn.stdpath("config") .. "/lua"] = true,
-							},
-							checkThirdParty = false,
-						},
-						telemetry = { enable = false },
-					},
-				},
-				root_dir = make_root_dir,
-			},
-		},
-		on_attach = function(_, bufnr)
-			local map = function(mode, lhs, rhs, desc)
-				vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc })
-			end
-			map("n", "gd", vim.lsp.buf.definition, "Go to definition")
-			map("n", "gr", vim.lsp.buf.references, "Go to references")
-			map("n", "K", vim.lsp.buf.hover, "Hover docs")
-			map("n", "<leader>rn", vim.lsp.buf.rename, "Rename symbol")
-			map("n", "<leader>ca", vim.lsp.buf.code_action, "Code action")
-		end,
-		capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities()),
-	},
-	config = function(_, opts)
-		-- Fidget setup
-		require("fidget").setup({})
-		-- Mason setup
-		require("mason").setup()
-		require("mason-lspconfig").setup({
-			ensure_installed = vim.tbl_keys(opts.servers),
-		})
 
-		local lspconfig = require("lspconfig")
-		for name, cfg in pairs(opts.servers) do
-			cfg = vim.tbl_extend("force", {
-				capabilities = opts.capabilities,
-				on_attach = opts.on_attach,
-				root_dir = make_root_dir, -- use modern root_dir for all servers
-			}, cfg)
+	config = function()
+		-- Capabilities (completion integration)
+		local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
-			-- Disable LSP formatting (Conform will handle it)
-			if cfg.capabilities then
-				cfg.capabilities.documentFormattingProvider = false
-			end
-
-			lspconfig[name].setup(cfg)
-		end
-
+		-- Diagnostics UI
 		vim.diagnostic.config({
 			virtual_text = true,
 			signs = true,
@@ -147,5 +74,39 @@ return {
 				prefix = "",
 			},
 		})
+
+		-- on_attach callback (runs when LSP attaches to a buffer)
+		local on_attach = function(client, bufnr)
+			-- disable formatting (using conform.nvim instead)
+			client.server_capabilities.documentFormattingProvider = false
+			client.server_capabilities.documentRangeFormattingProvider = false
+
+			local function bufmap(mode, lhs, rhs, desc)
+				vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, silent = true, desc = desc })
+			end
+
+			bufmap("n", "gd", vim.lsp.buf.definition, "Go to definition")
+			bufmap("n", "gr", vim.lsp.buf.references, "Go to references")
+			bufmap("n", "K", vim.lsp.buf.hover, "Hover docs")
+			bufmap("n", "<leader>rn", vim.lsp.buf.rename, "Rename symbol")
+			bufmap("n", "<leader>ca", vim.lsp.buf.code_action, "Code action")
+			bufmap("n", "<leader>e", vim.diagnostic.open_float, "Line diagnostics")
+			bufmap("n", "<leader>q", vim.diagnostic.setloclist, "Diagnostics list")
+
+			if client.server_capabilities.signatureHelpProvider then
+				bufmap("i", "<C-s>", vim.lsp.buf.signature_help, "Signature help")
+			end
+
+			bufmap("n", "<leader>lsr", ":LspRestart<CR>", "Restart LSP")
+		end
+
+		-- Register each server with defaults + overrides on_attach
+		for name, opts in pairs(SERVERS) do
+			opts = vim.tbl_deep_extend("force", {
+				on_attach = on_attach,
+				capabilities = capabilities,
+			}, opts or {})
+			vim.lsp.config[name] = opts
+		end
 	end,
 }

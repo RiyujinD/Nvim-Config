@@ -1,79 +1,80 @@
--- Helper: Function to deduplicate a list
--- Used to ensure parsers in `ensure_installed` are unique
-local function dedupList(list)
-	local popList, newList = {}, {}
-	for _, value in ipairs(list or {}) do
-		if not popList[value] then
-			popList[value] = true
-			table.insert(newList, value)
-		end
-	end
-	return newList
-end
-
 return {
-	-- Main Treesitter plugin
 	{
 		"nvim-treesitter/nvim-treesitter",
-		version = false,
+		lazy = false,
 		build = ":TSUpdate",
-		event = { "BufReadPost", "BufNewFile", "VeryLazy" },
-		lazy = vim.fn.argc(-1) == 0,
-		init = function(plugin)
-			-- PERF: ensure treesitter queries/predicates are available on rtp early
-			require("lazy.core.loader").add_to_rtp(plugin)
-			require("nvim-treesitter.query_predicates")
-		end,
-		cmd = { "TSUpdateSync", "TSUpdate", "TSInstall" },
-		keys = {
-			{ "<c-space>", desc = "Increment Selection" },
-			{ "<bs>", desc = "Decrement Selection", mode = "x" },
+		event = { "BufReadPost", "BufNewFile" },
+		dependencies = {
+			"nvim-treesitter/nvim-treesitter-textobjects",
 		},
-		---@type TSConfig
-		---@diagnostic disable-next-line: missing-fields
 		opts = {
-			modules = {}, -- optional module table (kept empty to satisfy types)
-			sync_install = false,
-			auto_install = true,
-			ignore_install = {},
-			-- Parsers
 			ensure_installed = {
 				"c",
-				"diff",
-				"html",
-				"javascript",
-				"jsdoc",
-				"json",
-				"jsonc",
+				"cpp",
 				"lua",
-				"luadoc",
-				"luap",
-				"markdown",
-				"markdown_inline",
-				"printf",
-				"python",
-				"tsx",
-				"typescript",
-				"xml",
-				"yaml",
 				"vim",
 				"vimdoc",
+				"query",
+				"python",
+				"go",
+				"rust",
+				"javascript",
+				"typescript",
+				"tsx",
+				"css",
+				"lua",
 				"bash",
+				"json",
+				"yaml",
+				"markdown",
+				"markdown_inline",
 			},
 
-			highlight = { enable = true },
-			indent = { enable = true },
+			-- Automatically install missing parsers when entering buffer
+			-- Recommendation: set to false if you don"t have `tree-sitter` CLI installed locally
+			auto_install = true,
+			sync_install = false,
+			indent = {
+				enable = true,
+			},
+			highlight = {
+				enable = true,
+
+				-- Disable for performance in html and large file (+100KB)
+				disable = function(lang, buf)
+					if lang == "html" then
+						print("disabled")
+						return true
+					end
+
+					local max_filesize = 100 * 1024 -- 100 KB
+					local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
+
+					if ok and stats and stats.size > max_filesize then
+						vim.notify(
+							"File larger than 100KB treesitter disabled for performance",
+							vim.log.levels.WARN,
+							{ title = "Treesitter" }
+						)
+						return true
+					end
+				end,
+			},
+
 			incremental_selection = {
 				enable = true,
 				keymaps = {
+
+					-- Start a selection at the current cursor node (e.g., a variable, expression, or function).
 					init_selection = "<C-space>",
+					-- Expand the selection to the parent node
 					node_incremental = "<C-space>",
-					scope_incremental = false,
+					-- Expand selection to scope
+					scope_incremental = "<leader><C-space>",
+					-- Shrink selection back down the tree
 					node_decremental = "<bs>",
 				},
 			},
-
-			-- Textobjects
 			textobjects = {
 				move = {
 					enable = true,
@@ -82,116 +83,48 @@ return {
 						["]c"] = "@class.outer",
 						["]a"] = "@parameter.inner",
 					},
-					goto_next_end = {
-						["]F"] = "@function.outer",
-						["]C"] = "@class.outer",
-						["]A"] = "@parameter.inner",
-					},
 					goto_previous_start = {
 						["[f"] = "@function.outer",
 						["[c"] = "@class.outer",
 						["[a"] = "@parameter.inner",
 					},
-					goto_previous_end = {
-						["[F"] = "@function.outer",
-						["[C"] = "@class.outer",
-						["[A"] = "@parameter.inner",
-					},
 				},
 			},
 		},
-
-		---@param opts TSConfig
 		config = function(_, opts)
-			-- Deduplicate `ensure_installed`, useful if some other plugin/spec added languages
-			if type(opts.ensure_installed) == "table" then
-				opts.ensure_installed = dedupList(opts.ensure_installed)
-			end
-
-			-- Call setup at runtime after chaging some value to be sure it runs with correct binding
 			require("nvim-treesitter.configs").setup(opts)
 		end,
 	},
 
-	-- Treesitter Textobjects extension
-	-- (adds extra movement and selection around functions, classes, etc.)
 	{
-		"nvim-treesitter/nvim-treesitter-textobjects",
-		event = "VeryLazy",
-		config = function(_, opts)
-			local textobjects_cfg = {
-				modules = {},
-				sync_install = false,
-				auto_install = true,
-				ignore_install = {},
-				ensure_installed = { "lua", "python", "javascript", "go", "rust" },
-				highlight = { enable = true },
-				indent = { enable = true },
-
-				-- Textobjects binds defined in the main opts
-				textobjects = opts.textobjects,
-			}
-
-			-- Call setup again with a full table, it duplicate a few keys from the main
-			-- setup, but keeps the exact behavior
-			require("nvim-treesitter.configs").setup(textobjects_cfg)
-
-			-- When in diff mode, prefer default vim text objects c & C instead of treesitter ones.
-			local move = require("nvim-treesitter.textobjects.move") ---@type table<string,fun(...)>
-			local configs = require("nvim-treesitter.configs")
-			for name, fn in pairs(move) do
-				if name:find("goto") == 1 then
-					move[name] = function(q, ...)
-						if vim.wo.diff then
-							local config = configs.get_module("textobjects.move")[name] ---@type table<string,string>
-							for key, query in pairs(config or {}) do
-								if q == query and key:find("[%]%[][cC]") then
-									vim.cmd("normal! " .. key)
-									return
-								end
-							end
-						end
-						return fn(q, ...)
-					end
-				end
-			end
-		end,
+		"nvim-treesitter/nvim-treesitter-context",
+		after = "nvim-treesitter",
+		opts = {
+			enable = true, -- Enable/disable the plugin require("treesitter-context").disable()
+			multiwindow = false, -- Only show context in the current window
+			max_lines = 0, -- No limit to context lines
+			min_window_height = 0, -- Always show context regardless of window height
+			line_numbers = true, -- Show line numbers in context
+			multiline_threshold = 20, -- Max lines for a single context block
+			trim_scope = "outer", -- Trim from outer side if context too long
+			mode = "cursor", -- Calculate context based on cursor line
+			separator = nil, -- Optional separator above context
+			zindex = 20, -- Floating window stack order
+			on_attach = nil, -- Optional per-buffer attach function
+		},
 	},
 
-	-- Auto-tagging (for HTML, JSX, etc.)
 	{
 		"windwp/nvim-ts-autotag",
-		event = { "BufReadPost", "BufNewFile" },
+		dependencies = { "nvim-treesitter/nvim-treesitter" },
+		event = "BufReadPost",
 		opts = {},
 	},
 
-	-- Playground: Treesitter debugging/visualization
 	{
 		"nvim-treesitter/playground",
 		dependencies = { "nvim-treesitter/nvim-treesitter" },
-		cmd = {
-			"TSPlaygroundToggle",
-			"TSPlaygroundFocus",
-			"TSPlaygroundUnfocus",
-			"TSPlaygroundShow",
-			"TSPlaygroundHide",
-			"TSPlaygroundUpdate",
-		},
-		config = function()
-			require("nvim-treesitter.configs").setup({
-				modules = {},
-				sync_install = false,
-				auto_install = true,
-				ignore_install = {},
-				ensure_installed = {},
-
-				-- Playground-specific configuration
-				playground = {
-					enable = true,
-					updatetime = 25,
-					persist_queries = false,
-				},
-			})
-		end,
+		cmd = "TSPlaygroundToggle",
+		opts = {},
 	},
 }
